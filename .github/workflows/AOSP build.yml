@@ -29,6 +29,8 @@ jobs:
         mkdir clang && cd clang
         curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
         chmod a+x antman
+        chmod +x antman
+        ./antman --help || true
         ./antman -S
         ./antman --patch=glibc
         cd ..

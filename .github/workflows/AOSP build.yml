@@ -26,16 +26,9 @@ jobs:
 
     - name: 🔧 Clone Toolchains
       run: |
-        mkdir clang && cd clang
-        curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
-        chmod a+x antman
-        chmod +x antman
-        ./antman --help || true
-        ./antman -S
-        ./antman --patch=glibc
-        cd ..
-        git clone https://github.com/greenforce-project/gcc-arm64 -b main --depth=1 gcc64
-        git clone https://github.com/greenforce-project/gcc-arm -b main --depth=1 gcc32
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+        git clone --depth=1 https://github.com/greenforce-project/gcc-arm64 -b master gcc64
+        git clone --depth=1 https://github.com/greenforce-project/gcc-arm -b master gcc32
 
     - name: ⚙️ Setup Environment
       run: |
@@ -44,8 +37,24 @@ jobs:
         echo "GCC64_PATH=$GITHUB_WORKSPACE/gcc64" >> $GITHUB_ENV
         echo "GCC32_PATH=$GITHUB_WORKSPACE/gcc32" >> $GITHUB_ENV
 
+    - name: 🔎 Debug Toolchains
+      run: |
+        echo "=== Clang Version ==="
+        $CLANG_PATH/bin/clang --version
+        echo "=== GCC64 Version ==="
+        $GCC64_PATH/bin/aarch64-elf-gcc --version
+        echo "=== GCC32 Version ==="
+        $GCC32_PATH/bin/arm-eabi-gcc --version || true
+
     - name: 📥 Clone kernelSU-Next
       run: curl -LSs "https://raw.githubusercontent.com/Mr-Morat/KernelSU-Next/susfs/kernel/setup.sh" | bash -s susfs
+
+    - name: 🔎 Debug Kernel Tree
+      run: |
+        echo "=== Kernel tree root ==="
+        ls -lh
+        echo "=== Check available defconfigs ==="
+        ls arch/arm64/configs | grep sweet || true
 
     - name: 🛠️ Build Kernel
       run: |
@@ -55,7 +64,7 @@ jobs:
         export KBUILD_BUILD_HOST=other_forger
         export KBUILD_COMPILER_STRING="$($CLANG_PATH/bin/clang --version | head -n 1)"
 
-        make O=out sweet_defconfig
+        make O=out sweet_defconfig || make O=out vendor/sweet_defconfig
 
         make -j$(nproc --all) O=out \
           ARCH=arm64 \
@@ -66,6 +75,11 @@ jobs:
 
         mv out/.config out/sweet_defconfig.txt
 
+    - name: 🔎 Debug Build Output
+      run: |
+        echo "=== Kernel build output ==="
+        ls -lh out/arch/arm64/boot || true
+
     - name: 💾 Upload configs
       uses: actions/upload-artifact@v4
       with:
@@ -75,13 +89,15 @@ jobs:
     - name: 📂 Clone Anykernel3 & Package
       run: |
         git clone --depth=1 https://github.com/Mr-Morat/anykernel3 -b main AnyKernel3
-        # copy kernel output (handle multiple possibilities)
         if [ -f "out/arch/arm64/boot/Image.gz-dtb" ]; then
           cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
         elif [ -f "out/arch/arm64/boot/Image.gz" ]; then
           cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
         elif [ -f "out/arch/arm64/boot/Image" ]; then
           cp out/arch/arm64/boot/Image AnyKernel3/Image
+        else
+          echo "❌ Tidak ada file kernel Image ditemukan!"
+          exit 1
         fi
         [ -f "out/arch/arm64/boot/dtbo.img" ] && cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
         [ -f "out/arch/arm64/boot/dtb.img" ] && cp out/arch/arm64/boot/dtb.img AnyKernel3/dtb.img

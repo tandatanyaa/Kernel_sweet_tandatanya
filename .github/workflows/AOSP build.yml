@@ -25,6 +25,7 @@ jobs:
         mkdir clang && cd clang && curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman" && chmod a+x antman && ./antman -S && ./antman --patch=glibc && cd ..
         git clone https://github.com/greenforce-project/gcc-arm64 -b main --depth=1 gcc64
         git clone https://github.com/greenforce-project/gcc-arm -b main --depth=1 gcc32
+        
     - name: ⚙️ Setup Environment
       run: |
         echo "BUILD_TIME=$(TZ=Asia/Jakarta date '+%d%m%Y-%H%M')" >> $GITHUB_ENV
@@ -41,7 +42,10 @@ jobs:
         export PATH="$CLANG_PATH/bin:$GCC64_PATH/bin:$GCC32_PATH/bin:$PATH"
         export KBUILD_BUILD_USER=nganu
         export KBUILD_BUILD_HOST=other_forger
-        export KBUILD_COMPILER_STRING="$$CLANG_PATH/clang"
+        export KBUILD_COMPILER_STRING="$CLANG_PATH/clang"
+        export KCFLAGS=-Wno-error=incompatible-pointer-types
+
+        mkdir -p out
         make O=out ARCH=arm64 sweet_defconfig
         make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang \
           CLANG_TRIPLE=$CLANG_PATH/aarch64-linux-gnu- \

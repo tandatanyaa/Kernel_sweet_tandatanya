@@ -264,15 +264,19 @@ static inline const struct cred *get_cred(const struct cred *cred)
  * on task_struct are attached by const pointers to prevent accidental
  * alteration of otherwise immutable credential sets.
  */
-static inline void put_cred(const struct cred *_cred)
-{
-	struct cred *nonconst_cred = (struct cred *) cred;
+	static inline const struct cred *get_cred(const struct cred *cred)
+        struct cred *nonconst_cred = (struct cred *) cred;
 
         validate_creds(cred);
 -       if (!atomic_inc_not_zero(&nonconst_cred->usage))
 +       if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
                 nonconst_cred = NULL;
         return nonconst_cred;
+ }
++
++#ifndef atomic_long_inc_not_zero
++#define atomic_long_inc_not_zero(v)   atomic_long_add_unless((v), 1, 0)
++#endif
 	}
 }
 

@@ -264,18 +264,16 @@ static inline const struct cred *get_cred(const struct cred *cred)
  * on task_struct are attached by const pointers to prevent accidental
  * alteration of otherwise immutable credential sets.
  */
-static inline void put_cred(const struct cred *_cred)
+static inline const struct cred *
+get_cred(const struct cred *cred)
 {
-	struct cred *cred = (struct cred *) _cred;
+        struct cred *nonconst_cred = (struct cred *) cred;
 
-	if (cred) {
-#if BITS_PER_LONG == 64
-		if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
-#else
-		if (!atomic_inc_not_zero(&cred->usage))
-#endif
-			__put_cred(cred);
-	}
+        if (cred) {
+                if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
+                        return NULL;
+        }
+        return cred;
 }
 /**
  * current_cred - Access the current task's subjective credentials

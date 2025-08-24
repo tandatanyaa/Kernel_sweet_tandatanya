@@ -266,12 +266,13 @@ static inline const struct cred *get_cred(const struct cred *cred)
  */
 static inline void put_cred(const struct cred *_cred)
 {
-	struct cred *cred = (struct cred *) _cred;
+	struct cred *nonconst_cred = (struct cred *) cred;
 
-	if (cred) {
-		validate_creds(cred);
-		if (atomic_long_dec_and_test(&(cred)->usage))
-			__put_cred(cred);
+        validate_creds(cred);
+-       if (!atomic_inc_not_zero(&nonconst_cred->usage))
++       if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
+                nonconst_cred = NULL;
+        return nonconst_cred;
 	}
 }
 

@@ -30,7 +30,10 @@
 #ifndef atomic_set_release
 #define  atomic_set_release(v, i)	smp_store_release(&(v)->counter, (i))
 #endif
-
+#define atomic_long_inc_not_zero(v)   atomic_long_add_unless((v), 1, 0)
+#ifndef atomic_long_inc_not_zero
+#define atomic_long_inc_not_zero(v)   atomic_long_add_unless((v), 1, 0)
+#endif
 /*
  * The idea here is to build acquire/release variants by adding explicit
  * barriers on top of the relaxed variant. In the case where the relaxed

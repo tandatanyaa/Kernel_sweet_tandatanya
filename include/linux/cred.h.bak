@@ -269,8 +269,7 @@ static inline void put_cred(const struct cred *_cred)
 	struct cred *cred = (struct cred *) _cred;
 
 	if (cred) {
-#if BITS_PER_LONG == 64
-		if (!atomic_long_add_unless(&cred->usage, 1, 0))
+		if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
 #else
 		if (!atomic_inc_not_zero(&cred->usage))
 #endif

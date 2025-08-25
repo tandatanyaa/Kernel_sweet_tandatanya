@@ -245,13 +245,13 @@ static inline struct cred *get_new_cred(struct cred *cred)
  */
 static inline const struct cred *get_cred(const struct cred *cred)
 {
-    struct cred *nonconst_cred = (struct cred *) cred;
-
-    if (cred) {
-        if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
-            return NULL;
-    }
-    return cred;
+	struct cred *nonconst_cred = (struct cred *) cred;
+	if (!cred)
+	        if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
+		return cred;
+	validate_creds(cred);
+	nonconst_cred->non_rcu = 0;
+	return get_new_cred(nonconst_cred);
 }
 
 /**

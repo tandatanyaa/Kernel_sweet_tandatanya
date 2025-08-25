@@ -243,6 +243,7 @@ static inline struct cred *get_new_cred(struct cred *cred)
  * accidental alteration of a set of credentials that should be considered
  * immutable.
  */
+static inline const struct cred *get_cred(const struct cred *cred)
 {
 	struct cred *nonconst_cred = (struct cred *) cred;
 	if (!cred)
@@ -264,8 +265,7 @@ static inline struct cred *get_new_cred(struct cred *cred)
  * on task_struct are attached by const pointers to prevent accidental
  * alteration of otherwise immutable credential sets.
  */
-static inline const struct cred *
-get_cred(const struct cred *cred)
+const struct cred *get_cred(const struct cred *cred)
 {
         struct cred *nonconst_cred = (struct cred *) cred;
 

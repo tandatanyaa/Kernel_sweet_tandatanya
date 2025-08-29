@@ -1,75 +1,93 @@
-name: build AOSP
+name: Build Sweet Kernel (4.14.356, Clang 20)
+
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-    - name: 🔄 Checkout Code
+    - name: 🔄 Checkout
       uses: actions/checkout@v4
-      
-    - name: ⏰ Prepare timezone
-      run: |
-        sudo rm /etc/localtime
-        sudo ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
-        
-    - name: 📦 Install Dependencies
-      run: |
-        sudo apt update -y
-        sudo apt install bc cpio flex bison aptitude git python-is-python3 tar aria2 perl wget curl lz4 libssl-dev -y
-        
-    - name: 🔧 Clone Toolchains
-      run: |
-        mkdir clang && cd clang && curl -LO "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman" && chmod a+x antman && ./antman -S && ./antman --patch=glibc && cd ..
-        git clone https://github.com/greenforce-project/gcc-arm64 -b main --depth=1 gcc64
-        git clone https://github.com/greenforce-project/gcc-arm -b main --depth=1 gcc32
-        
-    - name: ⚙️ Setup Environment
-      run: |
-        echo "BUILD_TIME=$(TZ=Asia/Jakarta date '+%d%m%Y-%H%M')" >> $GITHUB_ENV
-        echo "CLANG_PATH=$GITHUB_WORKSPACE/clang" >> $GITHUB_ENV
-        echo "GCC64_PATH=$GITHUB_WORKSPACE/gcc64" >> $GITHUB_ENV
-        echo "GCC32_PATH=$GITHUB_WORKSPACE/gcc32" >> $GITHUB_ENV
-        
-    - name: 📥 Clone kernelSU-Next
-      run: curl -LSs "https://raw.githubusercontent.com/Mr-Morat/KernelSU-Next/susfs/kernel/setup.sh" | bash -s susfs
-      
-    - name: 🛠️ Build Kernel
-      run: |
-        export ARCH=arm64
-        export PATH="$CLANG_PATH/bin:$GCC64_PATH/bin:$GCC32_PATH/bin:$PATH"
-        export KBUILD_BUILD_USER=nganu
-        export KBUILD_BUILD_HOST=other_forger
-        export KBUILD_COMPILER_STRING="$CLANG_PATH/clang"
-        export KCFLAGS=-Wno-error=incompatible-pointer-types
 
-        mkdir -p out
-        make O=out ARCH=arm64 sweet_defconfig
-        make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang \
-          CLANG_TRIPLE=$CLANG_PATH/aarch64-linux-gnu- \
-          CROSS_COMPILE=$GCC64_PATH/bin/aarch64-elf- \
-          CROSS_COMPILE_ARM32=$GCC32_PATH/bin/arm-eabi-
-        mv out/.config out/sweet_defconfig.txt
-        
-    - name: 💾 Upload configs
-      uses: actions/upload-artifact@v4
-      with:
-        name: configs-${{ env.BUILD_TIME }}
-        path: out/sweet_defconfig.txt
-        
-    - name: 📂 Clone Anykernel3 & Zip
+    - name: ⏰ Timezone Asia/Jakarta
       run: |
-        git clone --depth=1 https://github.com/Mr-Morat/anykernel3 -b main AnyKernel3
-        cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-        cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
-        cp out/arch/arm64/boot/dtb.img AnyKernel3/dtb.img
-        cd AnyKernel3
-        zip -r "../Blankont-AOSP-${{ env.BUILD_TIME }}.zip" *
-        
-    - name: 📤 Upload Flashable zip
+        sudo rm -f /etc/localtime
+        sudo ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
+
+    - name: 📦 Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          git ccache bc bison flex libssl-dev \
+          build-essential curl wget zip unzip \
+          libelf-dev python3 python3-pip rsync \
+          pkg-config libncurses-dev dwarves \
+          binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu \
+          gcc-arm-linux-gnueabi
+        echo "CCACHE_DIR=${HOME}/.ccache" >> $GITHUB_ENV
+
+    - name: 🧰 Install LLVM/Clang 20
+      run: |
+        # Ubuntu 22.04 repo resmi punya llvm-14; kita ambil rilis prebuilt LLVM 20
+        LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-20.0.0/clang+llvm-20.0.0-x86_64-linux-gnu-ubuntu-22.04.tar.xz"
+        mkdir -p $HOME/toolchains && cd $HOME/toolchains
+        curl -L "$LLVM_URL" -o llvm20.tar.xz
+        tar -xf llvm20.tar.xz
+        LLVM_DIR=$(find . -maxdepth 1 -type d -name "clang+llvm-20.0.0*" | head -n1)
+        echo "$HOME/toolchains/${LLVM_DIR}/bin" >> $GITHUB_PATH
+        echo "LLVM_DIR=$HOME/toolchains/${LLVM_DIR}" >> $GITHUB_ENV
+
+    - name: ⚙️ Export Build Vars
+      run: |
+        echo "ARCH=arm64" >> $GITHUB_ENV
+        echo "SUBARCH=arm64" >> $GITHUB_ENV
+        echo "LLVM=1" >> $GITHUB_ENV
+        echo "CC=clang" >> $GITHUB_ENV
+        echo "LD=ld.lld" >> $GITHUB_ENV
+        echo "AR=llvm-ar" >> $GITHUB_ENV
+        echo "NM=llvm-nm" >> $GITHUB_ENV
+        echo "OBJCOPY=llvm-objcopy" >> $GITHUB_ENV
+        echo "OBJDUMP=llvm-objdump" >> $GITHUB_ENV
+        echo "STRIP=llvm-strip" >> $GITHUB_ENV
+        echo "CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+        echo "CROSS_COMPILE_ARM32=arm-linux-gnueabi-" >> $GITHUB_ENV
+        echo "KBUILD_BUILD_USER=runner" >> $GITHUB_ENV
+        echo "KBUILD_BUILD_HOST=github" >> $GITHUB_ENV
+
+    - name: 🧱 Configure
+      run: |
+        mkdir -p out
+        make O=out sweet_defconfig || make O=out vendor/sweet_defconfig
+
+    - name: 🛠️ Build
+      run: |
+        make -j$(nproc) O=out Image.gz-dtb dtbs
+        # dtbo opsional:
+        make -j$(nproc) O=out dtbo.img || true
+
+    - name: 📦 AnyKernel3
+      run: |
+        cd $GITHUB_WORKSPACE
+        git clone https://github.com/osm0sis/AnyKernel3 -b master anykernel
+        cp out/arch/arm64/boot/Image.gz-dtb anykernel/zImage
+        # Jika butuh dtbo:
+        if [ -f out/arch/arm64/boot/dtbo.img ]; then
+          cp out/arch/arm64/boot/dtbo.img anykernel/dtbo.img
+        fi
+        # Set device(s) di anykernel.sh sesuai sweet/sweetin bila perlu.
+        cd anykernel
+        zip -r9 Sweet-4.14.356-Clang20.zip * -x .git* README.md *placeholder
+
+    - name: ⬆️ Upload Artefak
       uses: actions/upload-artifact@v4
       with:
-        name: Blankont-AOSP-${{ env.BUILD_TIME }}
-        path: AnyKernel3/*
+        name: Sweet-4.14.356-Clang20
+        path: |
+          out/arch/arm64/boot/Image.gz-dtb
+          out/arch/arm64/boot/dts/**/*.dtb
+          out/arch/arm64/boot/dtbo.img
+          anykernel/Sweet-4.14.356-Clang20.zip
+        if-no-files-found: warn

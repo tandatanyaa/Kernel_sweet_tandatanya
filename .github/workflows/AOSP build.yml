@@ -1,4 +1,4 @@
-name: Build Sweet Kernel (4.14.356, Clang 20)
+name: build AOSP
 
 on:
   workflow_dispatch:

@@ -410,5 +410,9 @@ do {						\
 	*(_fsuid) = __cred->fsuid;		\
 	*(_fsgid) = __cred->fsgid;		\
 } while(0)
-
+static inline void put_cred(const struct cred *cred)
+{
+        if (cred)
+                __put_cred((struct cred *) cred);
+}
 #endif /* _LINUX_CRED_H */

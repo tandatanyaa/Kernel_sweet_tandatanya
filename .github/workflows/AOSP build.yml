@@ -71,12 +71,12 @@ jobs:
             cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
             cp out/arch/arm64/boot/dtb.img AnyKernel3/dtb.img
             cd AnyKernel3
-            zip -r "../Blankont-AOSP-${{ env.BUILD_TIME }}.zip" *
+            zip -r "../BlankCTRL-AOSP-${{ env.BUILD_TIME }}.zip" *
 
     - name: Upload Flashable zip
       uses: actions/upload-artifact@v4
       with:
-        name: Blankont-AOSP-${{ env.BUILD_TIME }}
+        name: BlankCTRL-AOSP-${{ env.BUILD_TIME }}
         path: AnyKernel3/*
 
     - name: Send to Telegram (success)
@@ -85,7 +85,7 @@ jobs:
         curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument" \
         -F chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
         -F message_thread_id=2999409511 \
-        -F document=@"Blankont-AOSP-${{ env.BUILD_TIME }}.zip" \
+        -F document=@"BlankCTRL-AOSP-${{ env.BUILD_TIME }}.zip" \
         -F caption="✅ Build selesai, silahkan dicoba..."
 
     - name: Send to Telegram (failure log)
